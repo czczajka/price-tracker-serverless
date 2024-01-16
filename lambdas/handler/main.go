@@ -32,7 +32,8 @@ var plotsBucket = "price-tracker-plots"
 
 // Function responsible for handling result returned from tracker lambda
 // Main steps which function is repsonsile for:
-// 1. Put received event into dynamo database
+// 1. Create dynamo db table if not exists
+// 1. Put received event into dynamo table
 // 2. Generate plot for item and upload it to S3
 func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	// fmt.Print("Handler Lambda \n")
@@ -78,7 +79,33 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	// 	},
 	// })
 
-	// Generate plot sections
+	// Create dynamo db table
+	// Checkings if table already exists should be done before table creation
+	// For test purposes I will skip this step and ignore error if table exists
+	_, err = dbClient.CreateTable(ctx, &dynamodb.CreateTableInput{
+		TableName: aws.String("item1"),
+		AttributeDefinitions: []types.AttributeDefinition{
+			{
+				AttributeName: aws.String("date"),
+				AttributeType: types.ScalarAttributeTypeS,
+			},
+		},
+		KeySchema: []types.KeySchemaElement{
+			{
+				AttributeName: aws.String("date"),
+				KeyType:       types.KeyTypeHash,
+			},
+		},
+		BillingMode: types.BillingModePayPerRequest,
+	})
+	if err != nil {
+		if err == dynamodb.ErrResourceInUseException {
+			fmt.Printf("Table already exists\n")
+		} else {
+			return fmt.Errorf("failed to create table: %w", err)
+		}
+	}
+
 	// Get all items from dynamo db
 	dbRsp, err := dbClient.Scan(ctx, &dynamodb.ScanInput{
 		// TableName: aws.String(myEvent.Name),
@@ -148,7 +175,10 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 
 func main() {
 	// lambda.Start(HandleRequest)
-	HandleRequest(context.Background(), nil)
+	err := HandleRequest(context.Background(), nil)
+	if err != nil {
+		fmt.Printf("Error handling request: %v\n", err)
+	}
 }
 
 func generateLineItems(entries []Entry) []opts.LineData {
