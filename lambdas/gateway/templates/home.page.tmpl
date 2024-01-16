@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+
+<html lang="en">
+<head>
+  <title>Price tracker</title>
+  <style>
+    .center-text {
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+    {{range .Items}}
+    <div class="container center-section p-3 rounded">
+
+      <div>
+        <h3 class="center-text">{{.Name}}</h3>
+        <iframe class="rounded" src={{.Path}} width="100%" height="400px"></iframe>
+      </div>
+
+    </div>
+    {{end}}
+</body>
+
+</html>
