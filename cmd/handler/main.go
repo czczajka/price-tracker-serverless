@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -36,33 +38,33 @@ var plotsBucket = "price-tracker-plots"
 // 1. Put received event into dynamo table
 // 2. Generate plot for item and upload it to S3
 func HandleRequest(ctx context.Context, event json.RawMessage) error {
-	// fmt.Print("Handler Lambda \n")
-	// fmt.Printf("Request payload: %v\n", string(event))
+	fmt.Print("Handler Lambda \n")
+	fmt.Printf("Request payload: %v\n", string(event))
 
-	// // Get request payload and parse it to MyEvent struct
-	// var result map[string]interface{}
-	// if err := json.Unmarshal([]byte(event), &result); err != nil {
-	// 	return fmt.Errorf("Error parsing JSON: %v", err)
-	// }
+	// Get request payload and parse it to MyEvent struct
+	var result map[string]interface{}
+	if err := json.Unmarshal([]byte(event), &result); err != nil {
+		return fmt.Errorf("Error parsing JSON: %v", err)
+	}
 
-	// responsePayload, ok := result["responsePayload"]
-	// if !ok {
-	// 	return fmt.Errorf("error field not found")
-	// }
+	responsePayload, ok := result["responsePayload"]
+	if !ok {
+		return fmt.Errorf("error field not found")
+	}
 
-	// fieldJSON, err := json.Marshal(responsePayload)
-	// if err != nil {
-	// 	return fmt.Errorf("Error marshaling field to JSON: %v", err)
-	// }
+	fieldJSON, err := json.Marshal(responsePayload)
+	if err != nil {
+		return fmt.Errorf("Error marshaling field to JSON: %v", err)
+	}
 
-	// var myEvent MyEvent
-	// if err := json.Unmarshal(fieldJSON, &myEvent); err != nil {
-	// 	return fmt.Errorf("Error parsing myEvent: %v", err)
-	// }
+	var myEvent MyEvent
+	if err := json.Unmarshal(fieldJSON, &myEvent); err != nil {
+		return fmt.Errorf("Error parsing myEvent: %v", err)
+	}
 
-	// fmt.Printf("Event data: %v\n", myEvent)
+	fmt.Printf("Event data: %v\n", myEvent)
 
-	// // Connect to dynamo db
+	// Create dynamo db client
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration, %v", err)
@@ -70,20 +72,11 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 
 	dbClient := dynamodb.NewFromConfig(cfg)
 
-	// // Put item into dynamo db
-	// _, err = dbClient.PutItem(ctx, &dynamodb.PutItemInput{
-	// 	TableName: aws.String(myEvent.Name),
-	// 	Item: map[string]types.AttributeValue{
-	// 		"date":  &types.AttributeValueMemberS{Value: myEvent.Date},
-	// 		"value": &types.AttributeValueMemberS{Value: fmt.Sprintf("%f", myEvent.Value)},
-	// 	},
-	// })
-
 	// Create dynamo db table
 	// Checkings if table already exists should be done before table creation
 	// For test purposes I will skip this step and ignore error if table exists
 	_, err = dbClient.CreateTable(ctx, &dynamodb.CreateTableInput{
-		TableName: aws.String("item1"),
+		TableName: aws.String(myEvent.Name),
 		AttributeDefinitions: []types.AttributeDefinition{
 			{
 				AttributeName: aws.String("date"),
@@ -99,24 +92,36 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 		BillingMode: types.BillingModePayPerRequest,
 	})
 	if err != nil {
-		if err == dynamodb.ErrResourceInUseException {
+		var resourceInUseException *types.ResourceInUseException
+		if ok := errors.As(err, &resourceInUseException); ok {
 			fmt.Printf("Table already exists\n")
 		} else {
 			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
 
+	// Put item into dynamo db
+	_, err = dbClient.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(myEvent.Name),
+		Item: map[string]types.AttributeValue{
+			"date":  &types.AttributeValueMemberS{Value: myEvent.Date},
+			"value": &types.AttributeValueMemberN{Value: fmt.Sprintf("%f", myEvent.Value)},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to put item into table: %w", err)
+	}
+
+	// New plots generation
 	// Get all items from dynamo db
 	dbRsp, err := dbClient.Scan(ctx, &dynamodb.ScanInput{
-		// TableName: aws.String(myEvent.Name),
-		TableName: aws.String("item1"),
+		TableName: aws.String(myEvent.Name),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to scan table: %w", err)
 	}
 
 	items := dbRsp.Items
-	fmt.Printf("All items: %v\n", items)
 	var entries []Entry
 	// Convert dynamo data to models.Entry
 	for _, item := range items {
@@ -125,18 +130,17 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 		if val, ok := item["date"].(*types.AttributeValueMemberS); ok {
 			date = val.Value
 		} else {
-			// Handle the case where the value is not a string or the 'date' key does not exist
+			return fmt.Errorf("failed to get data from dynamo table: %w", err)
 		}
 		if val, ok := item["value"].(*types.AttributeValueMemberN); ok {
 			value = val.Value
 		} else {
-			// Handle the case where the value is not a string or the 'date' key does not exist
+			return fmt.Errorf("failed to get data from dynamo table: %w", err)
 		}
-		fmt.Printf("Readed from db: %s  %s\n", date, value)
+		fmt.Printf("Read from db: %s  %s\n", date, value)
 
 		valNumeric, err := strconv.ParseFloat(value, 32)
 		if err != nil {
-			fmt.Printf("Error parsing float: %v\n", err)
 			return fmt.Errorf("failed to convert string to float: %w", err)
 		}
 
@@ -150,9 +154,6 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	// Create s3 session where plots will be uploaded
 	s3Client := s3.NewFromConfig(cfg)
 
-	// key := myEvent.Name + ".html"
-	key := "item1.html"
-
 	buf, err := generatePlot(entries)
 	if err != nil {
 		fmt.Printf("Error generating plot: %v\n", err)
@@ -160,9 +161,10 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	}
 
 	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(plotsBucket),
-		Key:    aws.String(key),
-		Body:   bytes.NewReader(buf),
+		Bucket:      aws.String(plotsBucket),
+		Key:         aws.String(myEvent.Name + ".html"),
+		Body:        bytes.NewReader(buf),
+		ContentType: aws.String("text/html"),
 	})
 	if err != nil {
 		fmt.Printf("Error uploading file to S3: %v\n", err)
@@ -170,15 +172,13 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	}
 
 	fmt.Print("GenPlots completed successfully")
+
+	// Return the JSON as a string
 	return nil
 }
 
 func main() {
-	// lambda.Start(HandleRequest)
-	err := HandleRequest(context.Background(), nil)
-	if err != nil {
-		fmt.Printf("Error handling request: %v\n", err)
-	}
+	lambda.Start(HandleRequest)
 }
 
 func generateLineItems(entries []Entry) []opts.LineData {
@@ -215,3 +215,5 @@ func generatePlot(entries []Entry) ([]byte, error) {
 	}
 	return buf.Bytes(), nil
 }
+
+// TODO - creation of table take time, you need to wait until table is created

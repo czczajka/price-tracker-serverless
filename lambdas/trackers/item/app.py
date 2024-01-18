@@ -7,8 +7,9 @@ def lambda_handler(event, context):
     date = datetime.now().strftime("%Y-%m-%dT%H:%M")  # Get the current date and time
 
     rsp = {
+        "name": "item2",
         "date": date,
-        "value": val
+        "value": val,
     }
 
     return rsp
