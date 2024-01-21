@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -15,13 +16,39 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var plotsBucket = "price-tracker-plots"
-
 //go:embed templates/home.page.tmpl
 var tmpl embed.FS
 
+//go:embed app.config
+var configFS embed.FS
+
+type AppConfig struct {
+	AppBucket string `json:"appBucket"`
+}
+
 func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	fmt.Print("Home Lambda \n")
+
+	var awsCfg AppConfig
+	configFile, err := configFS.ReadFile("app.config")
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       "Error reading config file",
+		}, err
+	}
+
+	err = json.Unmarshal(configFile, &awsCfg)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+			Body:       "Error parsing config file",
+		}, err
+	}
+
+	// Use the configuration in your application
+	fmt.Printf("App Bucket: %s", awsCfg.AppBucket)
+
 	t, err := template.ParseFS(tmpl, "templates/home.page.tmpl")
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -52,7 +79,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	// Get all items from s3 bucket
 	// List objects
 	resp, err := s3Client.ListObjectsV2(context.TODO(), &s3.ListObjectsV2Input{
-		Bucket: &plotsBucket,
+		Bucket: &awsCfg.AppBucket,
 	})
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -67,7 +94,7 @@ func handleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 	}
 	for _, item := range resp.Contents {
 		item := Item{
-			Path: fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", plotsBucket, cfg.Region, *item.Key),
+			Path: fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", awsCfg.AppBucket, cfg.Region, *item.Key),
 			Name: *item.Key,
 		}
 		logrus.Infof("Item from S3: %v", item)

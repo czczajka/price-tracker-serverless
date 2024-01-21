@@ -1,7 +1,7 @@
 import random
 from datetime import datetime
 
-item_to_track_name = "item2"
+item_to_track_name = "exampleItem"
 
 def handler(event, context):
     val = random.randint(1, 10)  # Generate a random number between 1 and 10

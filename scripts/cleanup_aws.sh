@@ -4,6 +4,20 @@ LAMBDA_TRACKER=tracker-exampleItem
 LAMBDA_HANDLER=tracker-handler
 LAMBDA_GATEWAY=tracker-gateway
 
+ITEM_TO_TRACK_NAME=exampleItem
+
+# Delete dynamodb table
+# Name of tabke come from returned name value from tracker event 
+aws dynamodb delete-table \
+    --table-name ${ITEM_TO_TRACK_NAME}
+
+# Delete existing plot in s3
+aws s3 rm s3://tracker-exampleItem --recursive
+
+BUCKET_NAME=`jq -r '.appBucket' app.config`
+# Delete existing plots html in s3
+aws s3 rm "s3://${BUCKET_NAME}" --recursive
+
 # Delete the tracker lambda function
 aws lambda delete-function \
     --function-name ${LAMBDA_TRACKER}

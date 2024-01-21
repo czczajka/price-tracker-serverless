@@ -18,7 +18,8 @@ aws lambda create-function \
     --zip-file "fileb://dist/example_tracker/main.zip"
 
 
-./scripts/build_handler.sh
+# Build go apps
+./scripts/build_go_apps_with_docker.sh
 # Create a new handler lambda function
 aws lambda create-function \
     --function-name ${LAMBDA_HANDLER} \
@@ -49,7 +50,6 @@ aws events put-targets \
     --rule ${LAMBDA_TRACKER} \
     --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_TRACKER}"
 
-./scripts/build_gateway.sh
 # Create a lambda, which is connected with api gateway
 aws lambda create-function \
     --function-name "tracker-gateway" \

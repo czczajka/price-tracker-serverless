@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,12 @@ type Entry struct {
 	Value float32 `json:"value"`
 }
 
-var plotsBucket = "price-tracker-plots"
+//go:embed app.config
+var configFS embed.FS
+
+type AppConfig struct {
+	AppBucket string `json:"appBucket"`
+}
 
 // Function responsible for handling result returned from tracker lambda
 // Main steps which function is repsonsile for:
@@ -40,6 +46,20 @@ var plotsBucket = "price-tracker-plots"
 func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	fmt.Print("Handler Lambda \n")
 	fmt.Printf("Request payload: %v\n", string(event))
+
+	var awsCfg AppConfig
+	configFile, err := configFS.ReadFile("app.config")
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	err = json.Unmarshal(configFile, &awsCfg)
+	if err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Use the configuration in your application
+	fmt.Printf("App Bucket: %s\n", awsCfg.AppBucket)
 
 	// Get request payload and parse it to MyEvent struct
 	var result map[string]interface{}
@@ -73,8 +93,7 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	dbClient := dynamodb.NewFromConfig(cfg)
 
 	// Create dynamo db table
-	// Checkings if table already exists should be done before table creation
-	// For test purposes I will skip this step and ignore error if table exists
+	// For testing purposes there will be n attempts to create table each time
 	_, err = dbClient.CreateTable(ctx, &dynamodb.CreateTableInput{
 		TableName: aws.String(myEvent.Name),
 		AttributeDefinitions: []types.AttributeDefinition{
@@ -161,7 +180,7 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 	}
 
 	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(plotsBucket),
+		Bucket:      aws.String(awsCfg.AppBucket),
 		Key:         aws.String(myEvent.Name + ".html"),
 		Body:        bytes.NewReader(buf),
 		ContentType: aws.String("text/html"),
