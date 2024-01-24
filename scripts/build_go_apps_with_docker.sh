@@ -1,7 +1,7 @@
 mkdir -p dist/handler
 mkdir -p dist/gateway
 
-# Ugly hack but go embed works in a little starange way
+# Ugly hack but go embed works in a little strange way
 cp app.config cmd/gateway/app.config
 cp app.config cmd/handler/app.config
 

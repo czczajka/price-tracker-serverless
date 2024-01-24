@@ -97,3 +97,6 @@ aws lambda add-permission \
 # Get the api gateway url
 URL=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiEndpoint'`
 echo "URL: ${URL}"
+
+# TODO Create policies, roles
+# Use app.config to store the common names

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -170,10 +172,12 @@ func HandleRequest(ctx context.Context, event json.RawMessage) error {
 		entries = append(entries, entry)
 	}
 
+	sorted := sortEntries(entries)
+
 	// Create s3 session where plots will be uploaded
 	s3Client := s3.NewFromConfig(cfg)
 
-	buf, err := generatePlot(entries)
+	buf, err := generatePlot(sorted)
 	if err != nil {
 		fmt.Printf("Error generating plot: %v\n", err)
 		return fmt.Errorf("failed to generate plot: %w", err)
@@ -235,4 +239,26 @@ func generatePlot(entries []Entry) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// SortEntries sorts a slice of Entry by date and time in ascending order.
+func sortEntries(entries []Entry) []Entry {
+	sortedEntries := make([]Entry, len(entries))
+	copy(sortedEntries, entries)
+
+	dateFormat := "2006-01-02T15:04"
+
+	sort.Slice(sortedEntries, func(i, j int) bool {
+		t1, err1 := time.Parse(dateFormat, sortedEntries[i].Date)
+		t2, err2 := time.Parse(dateFormat, sortedEntries[j].Date)
+		if err1 != nil || err2 != nil {
+			fmt.Printf("Error parsing date: %v, %v\n", err1, err2)
+			return false
+		}
+		return t1.Before(t2)
+	})
+
+	return sortedEntries
+}
+
 // TODO - creation of table take time, you need to wait until table is created
+// Now it's a chance taht first item will be not added to table because it's not created yet
+// For demo purposes it's ok, but in production it should be fixed
