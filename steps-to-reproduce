@@ -1,0 +1,59 @@
+
+1. Create policies:
+    tracker-policy
+    handler-policy
+    gateway-policy
+
+2. Create roles:
+    tracker-role	
+    handler-role
+    gateway-role	
+
+3. Create bucket: price-tracker-plots
+    - bucket neeed to be public ! remove it after
+
+3. Create Tracker Lambda - tracker-exampleItem
+    - add tracker-role
+    - copy source code from: lambdas/trackers/item/app.py
+
+4. Create Handler Lambda - tracker-handler
+    - add handler-role
+    - change handler name
+
+5. Add tracker-handler as destination to tracker-exampleItem lambda
+
+6. Add EventBridge rule
+    - name 'tracker-exampleItem'
+    - every 2 minutes 
+
+7. Create gateway lambda
+
+8. Create and configure API Gateway
+    - create price-tracker-api
+
+
+Use AWS CLI to create the tracker-exampleItem Lambda function with Python 3.9 runtime.
+Build Handler and Gateway Applications:
+Execute the build_go_apps_with_docker.sh script to prepare the handler and gateway Lambda functions.
+Create Handler Lambda Function:
+Use AWS CLI to create the tracker-handler Lambda function with Go runtime.
+Configure Tracker Lambda to Invoke Handler Lambda on Success:
+Set the tracker-handler function as a destination for successful invocations of tracker-exampleItem.
+Create EventBridge Rule:
+Establish a rule to trigger the tracker-exampleItem function every 2 minutes.
+Set EventBridge as Event Source for Tracker Lambda:
+Grant necessary permissions for EventBridge to invoke the tracker-exampleItem function.
+Create Gateway Lambda Function:
+Use AWS CLI to create the tracker-gateway Lambda function with Go runtime.
+Create and Configure API Gateway:
+Create a new HTTP API Gateway linked to the tracker-gateway Lambda function.
+Retrieve the Gateway ID and configure a GET route for the API.
+Set Up API Gateway Integration and Route:
+Retrieve and configure the route and integration ID for the API Gateway.
+Grant API Gateway Permission to Invoke Gateway Lambda:
+Update Lambda permissions to allow API Gateway to invoke the tracker-gateway function.
+Retrieve and Display API Gateway URL:
+Output the API Gateway URL for accessing the application.
+Future Enhancements:
+Note about future plans to create policies and roles in the script and to use app.config for storing common names
+

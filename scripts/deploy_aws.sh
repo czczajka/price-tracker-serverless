@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 export AWS_PAGER=""
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
@@ -7,20 +9,79 @@ AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 LAMBDA_TRACKER=tracker-exampleItem
 LAMBDA_HANDLER=tracker-handler
 LAMBDA_GATEWAY=tracker-gateway
+BUCKET_NAME=`jq -r '.appBucket' app.config`
 
-./scripts/build_example_tracker.sh
+# Create a public bucket
+aws s3 mb s3://${BUCKET_NAME} 
+
+aws s3api put-public-access-block \
+    --bucket ${BUCKET_NAME}  \
+    --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+
+# Make the bucket public
+aws s3api put-bucket-policy \
+    --bucket ${BUCKET_NAME}  \
+    --policy file://policy/s3bucket-public.json
+
+# Create necessary policies
+# Create tracker-policy
+aws iam create-policy \
+    --policy-name tracker-policy \
+    --policy-document file://policy/tracker-policy.json
+
+# Create handler-policy
+aws iam create-policy \
+    --policy-name handler-policy \
+    --policy-document file://policy/handler-policy.json
+
+# Create gateway-policy
+aws iam create-policy \
+    --policy-name gateway-policy \
+    --policy-document file://policy/gateway-policy.json
+
+# Create necessary roles
+# Create tracker-role
+aws iam create-role \
+    --role-name tracker-role \
+    --assume-role-policy-document file://role/lambda-role.json
+
+# Attach tracker-policy to tracker-role
+aws iam attach-role-policy \
+    --role-name tracker-role \
+    --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/tracker-policy"
+
+# Create handler-role
+aws iam create-role \
+    --role-name handler-role \
+    --assume-role-policy-document file://role/lambda-role.json
+
+# Attach handler-policy to handler-role
+aws iam attach-role-policy \
+    --role-name handler-role \
+    --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/handler-policy"
+
+# Create gateway-role
+aws iam create-role \
+    --role-name gateway-role \
+    --assume-role-policy-document file://role/lambda-role.json
+
+# Attach gateway-policy to gateway-role
+aws iam attach-role-policy \
+    --role-name gateway-role \
+    --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/gateway-policy"
+
 # Create a new tracker lambda function
+./scripts/build_tracker_lambda.sh
 aws lambda create-function \
     --function-name ${LAMBDA_TRACKER} \
     --runtime python3.9 \
     --role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/tracker-role" \
-    --handler "app.handler" \
+    --handler "app.lambda_handler" \
     --zip-file "fileb://dist/example_tracker/main.zip"
 
 
-# Build go apps
-./scripts/build_go_apps_with_docker.sh
 # Create a new handler lambda function
+./scripts/build_go_lambdas.sh
 aws lambda create-function \
     --function-name ${LAMBDA_HANDLER} \
     --runtime go1.x \
@@ -98,5 +159,5 @@ aws lambda add-permission \
 URL=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiEndpoint'`
 echo "URL: ${URL}"
 
-# TODO Create policies, roles
+# TODO in future Create policies, roles in script
 # Use app.config to store the common names
