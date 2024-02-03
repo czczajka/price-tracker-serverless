@@ -18,6 +18,9 @@ aws s3api put-public-access-block \
     --bucket ${BUCKET_NAME}  \
     --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
 
+# Replace BUCKET_NAME_PLACEHOLDER with the actual bucket name
+sed "s/BUCKET_NAME_PLACEHOLDER/${BUCKET_NAME}/" policy/s3bucket-public-template.json > policy/s3bucket-public.json
+
 # Make the bucket public
 aws s3api put-bucket-policy \
     --bucket ${BUCKET_NAME}  \
