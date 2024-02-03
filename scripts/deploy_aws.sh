@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 export AWS_PAGER=""
 
@@ -73,6 +73,8 @@ aws iam attach-role-policy \
     --role-name gateway-role \
     --policy-arn "arn:aws:iam::${AWS_ACCOUNT_ID}:policy/gateway-policy"
 
+echo "sleeping..."
+sleep 6
 # Create a new tracker lambda function
 ./scripts/build_tracker_lambda.sh
 aws lambda create-function \
@@ -92,10 +94,13 @@ aws lambda create-function \
     --handler "main" \
     --zip-file "fileb://dist/handler/main.zip"
 
+echo "sleeping..."
+sleep 6
+
 # Add handler lambda as destinator for tracker lambda
 aws lambda put-function-event-invoke-config \
     --function-name ${LAMBDA_TRACKER} \
-    --destination-config '{"OnSuccess":{"Destination":"arn:aws:lambda:us-east-1:'${AWS_ACCOUNT_ID}':function:'${LAMBDA_HANDLER}'"}}'
+    --destination-config '{"OnSuccess":{"Destination":"arn:aws:lambda:eu-north-1:'${AWS_ACCOUNT_ID}':function:'${LAMBDA_HANDLER}'"}}'
 
 # Create a new rule to invoke the tracker lambda function every 2 minutes
 aws events put-rule \
@@ -108,11 +113,11 @@ aws lambda add-permission \
     --statement-id eventbridge-invoke \
     --action 'lambda:InvokeFunction' \
     --principal events.amazonaws.com \
-    --source-arn 'arn:aws:events:us-east-1:'${AWS_ACCOUNT_ID}':rule/'${LAMBDA_TRACKER}''
+    --source-arn 'arn:aws:events:eu-north-1:'${AWS_ACCOUNT_ID}':rule/'${LAMBDA_TRACKER}''
 
 aws events put-targets \
     --rule ${LAMBDA_TRACKER} \
-    --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_TRACKER}"
+    --targets "Id"="1","Arn"="arn:aws:lambda:eu-north-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_TRACKER}"
 
 # Create a lambda, which is connected with api gateway
 aws lambda create-function \
@@ -121,16 +126,19 @@ aws lambda create-function \
     --role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/gateway-role" \
     --handler "main" \
     --zip-file "fileb://dist/gateway/main.zip"
-
+sleep 6
+echo "sleeping"
 # Create a new api gateway and connect to / endpoint with the gateway lambda function
 aws apigatewayv2 create-api \
     --name "${LAMBDA_GATEWAY}" \
     --protocol-type HTTP \
-    --target "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_GATEWAY}"
-
+    --target "arn:aws:lambda:eu-north-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_GATEWAY}"
+sleep 6
+echo "sleeping"
 GATEWAY_ID=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiId'`
 echo "Gateway ID: ${GATEWAY_ID}"
-
+sleep 6
+echo "sleeping"
 # Create a GET route for the api gateway
 aws apigatewayv2 create-route \
     --api-id "${GATEWAY_ID}" \
@@ -143,21 +151,24 @@ echo "Route ID: ${ROUTE_ID}"
 # Get integration id
 INTEGRATION_ID=`aws apigatewayv2 get-integrations --api-id "${GATEWAY_ID}"  | jq -r '.Items[] | .IntegrationId'`
 echo "Integration ID: ${INTEGRATION_ID}"
-
+sleep 6
+echo "sleeping"
 # Update the route to use the integration
 aws apigatewayv2 update-route \
     --api-id "${GATEWAY_ID}" \
     --route-id "${ROUTE_ID}" \
     --target "integrations/${INTEGRATION_ID}"
 
-
+sleep 6
+echo "sleeping"
 aws lambda add-permission \
  --statement-id 5a6058ce-ce87-5bde-ab73-ea5adca00378 \
  --action lambda:InvokeFunction \
- --function-name "arn:aws:lambda:us-east-1:680401233849:function:${LAMBDA_GATEWAY}" \
+ --function-name "arn:aws:lambda:eu-north-1:680401233849:function:${LAMBDA_GATEWAY}" \
  --principal apigateway.amazonaws.com \
- --source-arn "arn:aws:execute-api:us-east-1:680401233849:${GATEWAY_ID}/*/*/"
-
+ --source-arn "arn:aws:execute-api:eu-north-1:680401233849:${GATEWAY_ID}/*/*/"
+sleep 6
+echo "sleeping"
 # Get the api gateway url
 URL=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiEndpoint'`
 echo "URL: ${URL}"
