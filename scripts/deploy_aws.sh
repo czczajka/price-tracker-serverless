@@ -1,10 +1,13 @@
 #!/bin/bash
 
 set -ex
-
 export AWS_PAGER=""
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+echo AWSc"Account id: $AWS_ACCOUNT_ID"
+
+AWS_REGION=$(aws configure get region)
+echo "AWS Region: $AWS_REGION"
 
 LAMBDA_TRACKER=tracker-exampleItem
 LAMBDA_HANDLER=tracker-handler
@@ -100,7 +103,7 @@ sleep 6
 # Add handler lambda as destinator for tracker lambda
 aws lambda put-function-event-invoke-config \
     --function-name ${LAMBDA_TRACKER} \
-    --destination-config '{"OnSuccess":{"Destination":"arn:aws:lambda:eu-north-1:'${AWS_ACCOUNT_ID}':function:'${LAMBDA_HANDLER}'"}}'
+    --destination-config '{"OnSuccess":{"Destination":"arn:aws:lambda:'${AWS_REGION}':'${AWS_ACCOUNT_ID}':function:'${LAMBDA_HANDLER}'"}}'
 
 # Create a new rule to invoke the tracker lambda function every 2 minutes
 aws events put-rule \
@@ -113,11 +116,11 @@ aws lambda add-permission \
     --statement-id eventbridge-invoke \
     --action 'lambda:InvokeFunction' \
     --principal events.amazonaws.com \
-    --source-arn 'arn:aws:events:eu-north-1:'${AWS_ACCOUNT_ID}':rule/'${LAMBDA_TRACKER}''
+    --source-arn 'arn:aws:events:'${AWS_REGION}':'${AWS_ACCOUNT_ID}':rule/'${LAMBDA_TRACKER}''
 
 aws events put-targets \
     --rule ${LAMBDA_TRACKER} \
-    --targets "Id"="1","Arn"="arn:aws:lambda:eu-north-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_TRACKER}"
+    --targets "Id"="1","Arn"="arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_TRACKER}"
 
 # Create a lambda, which is connected with api gateway
 aws lambda create-function \
@@ -132,13 +135,18 @@ echo "sleeping"
 aws apigatewayv2 create-api \
     --name "${LAMBDA_GATEWAY}" \
     --protocol-type HTTP \
-    --target "arn:aws:lambda:eu-north-1:${AWS_ACCOUNT_ID}:function:${LAMBDA_GATEWAY}"
+    --target "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_GATEWAY}"
 sleep 6
 echo "sleeping"
+
 GATEWAY_ID=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiId'`
+# Check is DATEWAY_ID non-empty
+if [ -z "${GATEWAY_ID}" ]; then
+    echo "Gateway ID is empty"
+    exit 1
+fi
 echo "Gateway ID: ${GATEWAY_ID}"
-sleep 6
-echo "sleeping"
+
 # Create a GET route for the api gateway
 aws apigatewayv2 create-route \
     --api-id "${GATEWAY_ID}" \
@@ -146,32 +154,40 @@ aws apigatewayv2 create-route \
 
 # Get route id
 ROUTE_ID=`aws apigatewayv2 get-routes --api-id "${GATEWAY_ID}" | jq -r '.Items[] | select(.RouteKey=="GET /") | .RouteId'`
+# Check is ROUTE_ID non-empty
+if [ -z "${ROUTE_ID}" ]; then
+    echo "Route ID is empty"
+    exit 1
+fi
 echo "Route ID: ${ROUTE_ID}"
 
 # Get integration id
 INTEGRATION_ID=`aws apigatewayv2 get-integrations --api-id "${GATEWAY_ID}"  | jq -r '.Items[] | .IntegrationId'`
+# Check is INTEGRATION_ID non-empty
+if [ -z "${INTEGRATION_ID}" ]; then
+    echo "Integration ID is empty"
+    exit 1
+fi
 echo "Integration ID: ${INTEGRATION_ID}"
-sleep 6
-echo "sleeping"
+
 # Update the route to use the integration
 aws apigatewayv2 update-route \
     --api-id "${GATEWAY_ID}" \
     --route-id "${ROUTE_ID}" \
     --target "integrations/${INTEGRATION_ID}"
 
-sleep 6
-echo "sleeping"
 aws lambda add-permission \
  --statement-id 5a6058ce-ce87-5bde-ab73-ea5adca00378 \
  --action lambda:InvokeFunction \
- --function-name "arn:aws:lambda:eu-north-1:680401233849:function:${LAMBDA_GATEWAY}" \
+ --function-name "arn:aws:lambda:${AWS_REGION}:680401233849:function:${LAMBDA_GATEWAY}" \
  --principal apigateway.amazonaws.com \
- --source-arn "arn:aws:execute-api:eu-north-1:680401233849:${GATEWAY_ID}/*/*/"
-sleep 6
-echo "sleeping"
+ --source-arn "arn:aws:execute-api:${AWS_REGION}:680401233849:${GATEWAY_ID}/*/*/"
+
 # Get the api gateway url
 URL=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiEndpoint'`
+# Check is URL non-empty
+if [ -z "${URL}" ]; then
+    echo "URL is empty"
+    exit 1
+fi
 echo "URL: ${URL}"
-
-# TODO in future Create policies, roles in script
-# Use app.config to store the common names

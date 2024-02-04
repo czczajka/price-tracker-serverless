@@ -1,1 +1,5 @@
 dist/
+cmd/gateway/app.config
+cmd/handler/app.config
+policy/s3bucket-public.json
+.DS_Store
