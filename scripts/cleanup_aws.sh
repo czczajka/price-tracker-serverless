@@ -1,5 +1,9 @@
 #!/bin/bash
 
+set -x
+
+export AWS_PAGER=""
+
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 
 LAMBDA_TRACKER=tracker-exampleItem
@@ -10,15 +14,12 @@ BUCKET_NAME=`jq -r '.appBucket' app.config`
 ITEM_TO_TRACK_NAME=exampleItem
 
 # Remove all items in the bucket
-echo "Bucket name: ${BUCKET_NAME}"
+echo "Bucket to remove: ${BUCKET_NAME}"
 aws s3 rm "s3://${BUCKET_NAME}" --recursive
 
-# Delete the bucket
-aws s3api delete-bucket \
-    --bucket ${BUCKET_NAME}
-
 # Delete dynamodb table
-# Name of table come from returned name value from tracker event 
+# Name of table come from returned name value from tracker event
+echo "table to remove: ${ITEM_TO_TRACK_NAME}"
 aws dynamodb delete-table \
     --table-name ${ITEM_TO_TRACK_NAME}
 
@@ -26,6 +27,10 @@ BUCKET_NAME=`jq -r '.appBucket' app.config`
 echo "Bucket name: ${BUCKET_NAME}"
 # Delete existing plots html in s3
 aws s3 rm "s3://${BUCKET_NAME}" --recursive
+
+# Delete the bucket
+aws s3api delete-bucket \
+    --bucket ${BUCKET_NAME}
 
 # Delete the tracker lambda function
 aws lambda delete-function \
@@ -50,6 +55,7 @@ aws lambda delete-function \
 
 # Delete the api gateway
 GATEWAY_ID=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiId'`
+echo "Gateway id: ${GATEWAY_ID}"
 
 aws apigatewayv2 delete-api \
     --api-id ${GATEWAY_ID}

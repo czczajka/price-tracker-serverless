@@ -130,11 +130,12 @@ aws lambda create-function \
     --handler "main" \
     --zip-file "fileb://dist/gateway/main.zip"
 
-# Get arn of the gateway lambda
-LAMBDA_GATEWAY_ARN=`aws lambda get-function --function-name ${LAMBDA_GATEWAY} | jq -r '.Configuration.FunctionArn'`
-
 sleep 6
 echo "sleeping"
+# Get arn of the gateway lambda
+LAMBDA_GATEWAY_ARN=`aws lambda get-function --function-name ${LAMBDA_GATEWAY} | jq -r '.Configuration.FunctionArn'`
+echo "Gateway lambda ARN: ${LAMBDA_GATEWAY_ARN}"
+
 # Create a new api gateway and connect to / endpoint with the gateway lambda function
 aws apigatewayv2 create-api \
     --name "${LAMBDA_GATEWAY}" \
@@ -194,9 +195,9 @@ aws apigatewayv2 update-route \
 aws lambda add-permission \
  --statement-id 5a6058ce-ce87-5bde-ab73-ea5adca00378 \
  --action lambda:InvokeFunction \
- --function-name "arn:aws:lambda:${AWS_REGION}:680401233849:function:${LAMBDA_GATEWAY}" \
+ --function-name "arn:aws:lambda:${AWS_REGION}:${AWS_ACCOUNT_ID}:function:${LAMBDA_GATEWAY}" \
  --principal apigateway.amazonaws.com \
- --source-arn "arn:aws:execute-api:${AWS_REGION}:680401233849:${GATEWAY_ID}/*/*/"
+ --source-arn "arn:aws:execute-api:${AWS_REGION}:${AWS_ACCOUNT_ID}:${GATEWAY_ID}/*/*/"
 
 # Get the api gateway url
 URL=`aws apigatewayv2 get-apis | jq -r '.Items[] | select(.Name=="'${LAMBDA_GATEWAY}'") | .ApiEndpoint'`
