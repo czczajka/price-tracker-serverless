@@ -124,11 +124,15 @@ aws events put-targets \
 
 # Create a lambda, which is connected with api gateway
 aws lambda create-function \
-    --function-name "tracker-gateway" \
+    --function-name ${LAMBDA_GATEWAY} \
     --runtime go1.x \
     --role "arn:aws:iam::${AWS_ACCOUNT_ID}:role/gateway-role" \
     --handler "main" \
     --zip-file "fileb://dist/gateway/main.zip"
+
+# Get arn of the gateway lambda
+LAMBDA_GATEWAY_ARN=`aws lambda get-function --function-name ${LAMBDA_GATEWAY} | jq -r '.Configuration.FunctionArn'`
+
 sleep 6
 echo "sleeping"
 # Create a new api gateway and connect to / endpoint with the gateway lambda function
@@ -161,8 +165,19 @@ if [ -z "${ROUTE_ID}" ]; then
 fi
 echo "Route ID: ${ROUTE_ID}"
 
-# Get integration id
-INTEGRATION_ID=`aws apigatewayv2 get-integrations --api-id "${GATEWAY_ID}"  | jq -r '.Items[] | .IntegrationId'`
+# Create a Lambda integration
+INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+    --api-id "${GATEWAY_ID}" \
+    --integration-type AWS_PROXY \
+    --integration-method POST \
+    --payload-format-version "2.0" \
+    --integration-uri "${LAMBDA_GATEWAY_ARN}" \
+    --query "IntegrationId" \
+    --output text)
+
+sleep 6
+echo "sleeping"
+
 # Check is INTEGRATION_ID non-empty
 if [ -z "${INTEGRATION_ID}" ]; then
     echo "Integration ID is empty"
