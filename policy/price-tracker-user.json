@@ -39,8 +39,11 @@
         {
             "Effect": "Allow",
             "Action": [
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
                 "iam:DetachRolePolicy",
                 "iam:DeleteRole",
+                "iam:CreatePolicy",
                 "iam:DeletePolicy"
             ],
             "Resource": "*"
