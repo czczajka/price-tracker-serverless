@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -e
 export AWS_PAGER=""
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)

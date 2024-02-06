@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -x
+#set -x
 
 export AWS_PAGER=""
 
